@@ -1,0 +1,5 @@
+# requirements.txt
+# Generado para el proyecto: Mantenedor de Configuración (KQI - Pilar 1)
+
+streamlit>=1.30.0
+databricks-sql-connector>=3.1.0
