@@ -27,14 +27,9 @@ def guardar_en_unity_catalog(proyecto: str, modelo: str, umbral: float) -> bool:
         # o los secretos inyectados en el entorno. Ajustar los nombres de
         # DATABRICKS_SERVER_HOSTNAME, DATABRICKS_HTTP_PATH y DATABRICKS_TOKEN.
         # ---------------------------------------------------------------------
-        server_hostname = os.getenv("DATABRICKS_SERVER_HOSTNAME", "mock_host")
-        http_path = os.getenv("DATABRICKS_HTTP_PATH", "mock_path")
-        access_token = os.getenv("DATABRICKS_TOKEN", "mock_token")
-
-        # Si detectamos que estamos en entorno local/externo sin credenciales reales,
-        # forzamos una excepción para caer en el bloque except (el mock).
-        if server_hostname == "mock_host":
-            raise ConnectionError("Credenciales de Unity Catalog no detectadas. Entorno local simulado.")
+        server_hostname = "dbc-0dbd7378-b83b.cloud.databricks.com"
+        http_path = "/sql/1.0/warehouses/e246119012938b18"
+        access_token = "dapi81eb07c7558b396214faa3a5346a85f5"
 
         # Lógica de conexión real a Databricks SQL Warehouse
         with sql.connect(
