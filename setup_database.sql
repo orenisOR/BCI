@@ -32,6 +32,24 @@ USING DELTA
 PARTITIONED BY (fecha_procesamiento)
 COMMENT 'Tabla consolidada con los resultados duales para consumo en PowerBI';
 
+-- Capa de Entrada: Transcripciones Silver a ser evaluadas
+CREATE TABLE IF NOT EXISTS silver_transcripciones (
+    id_documento STRING NOT NULL,
+    nombre_documento STRING NOT NULL, -- Debe coincidir con nombre_tipo_documento
+    Monto DOUBLE,                     -- Utilizado en procesamiento Semiestructurado (ej. Apolo 3)
+    Estado STRING,                    -- Utilizado en procesamiento Semiestructurado (ej. Apolo 3)
+    texto_transcrito STRING           -- Utilizado en procesamiento No Estructurado (ej. Apolo)
+)
+USING DELTA
+COMMENT 'Tabla Silver de origen de transcripciones y campos clave';
+
+-- Insertar Datos Mock en la Capa Silver para pruebas iniciales
+INSERT INTO silver_transcripciones (id_documento, nombre_documento, Monto, Estado, texto_transcrito) VALUES
+('doc_001_apolo3_bueno', 'Apolo 3', 1500.0, 'activo', NULL),
+('doc_002_apolo3_malo', 'Apolo 3', -50.0, 'inactivo', NULL),
+('doc_003_apolo_bueno', 'Apolo', NULL, NULL, 'CONTRATO DE ARRENDAMIENTO. En la ciudad de México, a 15 de mayo de 2026, comparecen por una parte el Arrendador y por otra el Arrendatario. Ambas partes acuerdan sujetarse a las cláusulas descritas en este documento con total claridad y coherencia legal.'),
+('doc_004_apolo_malo', 'Apolo', NULL, NULL, 'C0N7RA70 D3 ARR3ND4M1ENT0... sfgsdfg. En 1a ciud4d de M3x1c0.. comparecen.. 00110001 error de lectura OCR... %$#');
+
 -- Vista materializada/lógica recomendada para PowerBI
 CREATE OR REPLACE VIEW vw_kqi_alertas_powerbi AS
 SELECT 
@@ -46,3 +64,4 @@ SELECT
     fecha_procesamiento
 FROM kqi_resultados
 WHERE score_global < 0.8; -- Umbral de alerta por defecto
+
