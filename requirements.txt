@@ -1,0 +1,9 @@
+streamlit
+pyspark
+faiss-cpu
+google-generativeai
+pandas
+PyYAML
+databricks-sdk
+python-dotenv
+databricks-sql-connector

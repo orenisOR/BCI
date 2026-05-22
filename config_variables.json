@@ -1,0 +1,25 @@
+{
+    "kqi_no_estructurados": [
+        {"id": "coherencia", "nombre": "Coherencia"},
+        {"id": "ambiguedad", "nombre": "Ambigüedad"},
+        {"id": "entropia", "nombre": "Entropía"},
+        {"id": "palabras_ilegibles", "nombre": "Cantidad de palabras ilegibles"},
+        {"id": "ratio_imagenes", "nombre": "Cantidad de imágenes sobre cantidad de texto"}
+    ],
+    "modelos_llm": [
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-1.0-pro"
+    ],
+    "administradores": [
+        "admin@bci.cl",
+        "data_steward@bci.cl"
+    ],
+    "operadores_matematicos": [
+        ">", "<", ">=", "<=", "==", "!="
+    ],
+    "naturaleza_documentos": [
+        "No Estructurados (Textos, Párrafos)",
+        "Semiestructurados (JSON, Tablas)"
+    ]
+}

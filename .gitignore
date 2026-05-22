@@ -1,0 +1,31 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables & secrets (Credentials)
+.env
+.env.*
+databricks_config.yaml
+
+# Mock Data / Local DB Simulators
+mock_config.json
+mock_silver_data.json
+mock_gold_data.json
+mock_kqi_resultados.json
+mock_hitl_revision.json
+
+# Local alerts and reports
+alertas/
+powerbi_data/
+
+# Documentos grandes o auxiliares
+*.pdf
+*.docx
+Traza de ejecución.txt
+
+# IDE / System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
