@@ -1,12 +1,12 @@
 import streamlit as st
 import json
 import datetime
-from utils import generar_sidebar, cargar_configuracion_maestra
+from utils import generar_sidebar, cargar_configuracion_maestra, guardar_configuracion_maestra
 
-st.set_page_config(page_title="Crear Nuevo Documento - KQI Bci", layout="wide", page_icon="➕")
+st.set_page_config(page_title="Crear Nuevo Documento - KQI Bci", layout="wide", page_icon="\u2795")
 generar_sidebar()
 
-st.markdown('<h1 class="bci-gradient-title">➕ Crear Nuevo Tipo de Documento</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="bci-gradient-title">\u2795 Crear Nuevo Tipo de Documento</h1>', unsafe_allow_html=True)
 st.markdown("Registra un nuevo tipo de documento en el inventario del Proyecto Apolo para comenzar su gobernanza de calidad.")
 st.write("")
 
@@ -22,10 +22,10 @@ except FileNotFoundError:
 with st.container():
     with st.form("form_nuevo_doc"):
         nuevo_nombre = st.text_input("Nombre del Documento", placeholder="Ej. Contrato de Arriendo")
-        st.caption("El nombre debe ser único e identificar claramente el documento a auditar.")
+        st.caption("El nombre debe ser \u00fanico e identificar claramente el documento a auditar.")
         
         nueva_naturaleza = st.selectbox("Naturaleza del Dato", nat_lista)
-        st.caption("Determina si el documento se evaluará con FAISS+LLM o Validaciones Deterministas.")
+        st.caption("Determina si el documento se evaluar\u00e1 con FAISS+LLM o Validaciones Deterministas.")
         
         submitted_nuevo = st.form_submit_button("Crear Documento", type="primary")
         
@@ -39,8 +39,8 @@ with st.container():
                     "parametros": {},
                     "timestamp": str(datetime.datetime.now())
                 }
-                with open("mock_config.json", "w", encoding="utf-8") as f:
-                    json.dump(config_maestra, f, indent=4)
+                # Guardar usando la funci\u00f3n centralizada (Unity Catalog en Databricks Apps)
+                guardar_configuracion_maestra(config_maestra)
                 
                 # Redirigir al inventario
                 st.success(f"Documento '{nuevo_nombre}' creado exitosamente.")

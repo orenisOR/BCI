@@ -13,7 +13,8 @@
     ],
     "administradores": [
         "admin@bci.cl",
-        "data_steward@bci.cl"
+        "data_steward@bci.cl",
+        "orenis@dmclatino.com"
     ],
     "operadores_matematicos": [
         ">", "<", ">=", "<=", "==", "!="

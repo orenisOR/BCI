@@ -1,5 +1,10 @@
-command: [
-  "streamlit",
-  "run",
-  "app.py"
-]
+command:
+  - streamlit
+  - run
+  - app.py
+
+resources:
+  - name: sql-warehouse
+    sql_warehouse:
+      id: "0e6bd176c827b16a"
+      permission: CAN_USE

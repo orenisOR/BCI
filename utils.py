@@ -3,6 +3,11 @@ import json
 import os
 import yaml
 
+WAREHOUSE_ID = "0e6bd176c827b16a"
+CATALOG = "workspace"
+SCHEMA = "bci_kqi_apolo"
+
+
 def inyectar_css_corporativo():
     """Inyecta el CSS para aplicar un diseño visual premium con estilo corporativo Bci."""
     st.markdown("""
@@ -11,37 +16,37 @@ def inyectar_css_corporativo():
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         [data-testid="stSidebarNav"] {display: none;} /* Oculta navegación nativa */
-        
+
         /* Importar Tipografía Premium */
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-        
+
         /* Aplicar fuente Outfit a todos los componentes */
         html, body, [class*="css"], .stApp, .stMarkdown, p, span, h1, h2, h3, h4, h5, h6 {
             font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
         }
-        
+
         /* Estilo elegante para la barra lateral (Sidebar) */
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #091C3E 0%, #030A18 100%) !important;
             border-right: 1px solid rgba(0, 229, 255, 0.1) !important;
             box-shadow: 4px 0 15px rgba(0, 0, 0, 0.3) !important;
         }
-        
+
         [data-testid="stSidebar"] * {
             color: #E2E8F0 !important;
         }
-        
+
         [data-testid="stSidebar"] a {
             border-radius: 8px !important;
             padding: 8px 12px !important;
             transition: all 0.2s ease !important;
         }
-        
+
         [data-testid="stSidebar"] a:hover {
             background: rgba(0, 229, 255, 0.1) !important;
             transform: translateX(4px) !important;
         }
-        
+
         /* Estilo de Tarjetas de Información (Bci Cards) */
         .bci-card {
             background: rgba(255, 255, 255, 0.02) !important;
@@ -52,14 +57,14 @@ def inyectar_css_corporativo():
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
         }
-        
+
         .bci-card:hover {
             transform: translateY(-4px) scale(1.005) !important;
             border-color: #00E5FF !important;
             box-shadow: 0 10px 20px rgba(0, 229, 255, 0.1) !important;
             background: rgba(255, 255, 255, 0.04) !important;
         }
-        
+
         /* Título con Gradiente de Alta Fidelidad */
         .bci-gradient-title {
             background: linear-gradient(90deg, #00E5FF 0%, #0072FF 100%) !important;
@@ -68,7 +73,7 @@ def inyectar_css_corporativo():
             font-weight: 800 !important;
             letter-spacing: -0.5px !important;
         }
-        
+
         /* Botón de Acción Principal (Estilo Premium) */
         button[kind="primary"] {
             background: linear-gradient(135deg, #0052D4 0%, #4364F7 50%, #6FB1FC 100%) !important;
@@ -80,30 +85,30 @@ def inyectar_css_corporativo():
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
             box-shadow: 0 4px 14px rgba(67, 100, 247, 0.4) !important;
         }
-        
+
         button[kind="primary"]:hover {
             transform: translateY(-2px) scale(1.02) !important;
             box-shadow: 0 6px 20px rgba(67, 100, 247, 0.6) !important;
         }
-        
+
         /* Botón de Acción Secundario / Otros Botones */
         button[kind="secondary"], button:not([kind="primary"]) {
             border-radius: 8px !important;
             transition: all 0.2s ease !important;
         }
-        
+
         button[kind="secondary"]:hover, button:not([kind="primary"]):hover {
             border-color: #00E5FF !important;
             color: #00E5FF !important;
             background: rgba(0, 229, 255, 0.05) !important;
         }
-        
+
         /* Inputs y Campos de Entrada Elegantes */
         .stTextInput input, .stSelectbox select, .stNumberInput input {
             border-radius: 8px !important;
             transition: all 0.3s ease !important;
         }
-        
+
         .stTextInput input:focus, .stSelectbox select:focus, .stNumberInput input:focus {
             border-color: #00E5FF !important;
             box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.2) !important;
@@ -111,52 +116,81 @@ def inyectar_css_corporativo():
     </style>
     """, unsafe_allow_html=True)
 
+
 def es_entorno_databricks():
     """Detecta si el script se está ejecutando dentro de Databricks o Databricks Apps."""
     return (
-        "DATABRICKS_RUNTIME_VERSION" in os.environ or 
-        "DATABRICKS_APP_PORT" in os.environ or
-        "DATABRICKS_APP_NAME" in os.environ
+        "DATABRICKS_RUNTIME_VERSION" in os.environ
+        or "DATABRICKS_APP_PORT" in os.environ
+        or "DATABRICKS_APP_NAME" in os.environ
     )
 
-def obtener_conexion_databricks():
-    """Establece conexión a Databricks SQL Warehouse usando databricks-sql-connector."""
-    from databricks import sql
-    import yaml
-    
-    server_hostname = os.environ.get("DATABRICKS_SERVER_HOSTNAME")
-    http_path = os.environ.get("DATABRICKS_HTTP_PATH")
-    token = os.environ.get("DATABRICKS_TOKEN")
-    
-    if not (server_hostname and http_path and token):
-        try:
-            with open("databricks_config.yaml", "r", encoding="utf-8") as f:
-                db_config = yaml.safe_load(f)
-                server_hostname = server_hostname or db_config.get("databricks_server_hostname")
-                http_path = http_path or db_config.get("databricks_http_path")
-                token = token or db_config.get("databricks_token")
-        except Exception:
-            pass
-            
-    if not (server_hostname and http_path and token):
-        raise Exception("Credenciales de Databricks no configuradas.")
-        
-    return sql.connect(
-        server_hostname=server_hostname,
-        http_path=http_path,
-        access_token=token
+
+def _parsear_parametros_json(raw_value):
+    """Parsea JSON tolerando filas históricas con backslashes mal escapados."""
+    if not raw_value:
+        return {}
+
+    if isinstance(raw_value, dict):
+        return raw_value
+
+    try:
+        return json.loads(raw_value)
+    except json.JSONDecodeError:
+        json_normalizado = raw_value.replace("\\", "\\\\")
+        return json.loads(json_normalizado)
+
+
+def _escape_sql_literal(value):
+    """Escapa texto para interpolarlo de forma segura en literales SQL."""
+    if value is None:
+        return ""
+    return str(value).replace("\\", "\\\\").replace("'", "''")
+
+
+def ejecutar_sql(statement, fetch=False):
+    """Ejecuta una sentencia SQL usando la API Statement Execution del SDK."""
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.sql import StatementState
+    import time
+
+    w = WorkspaceClient()
+
+    response = w.statement_execution.execute_statement(
+        warehouse_id=WAREHOUSE_ID,
+        statement=statement,
+        catalog=CATALOG,
+        schema=SCHEMA,
+        wait_timeout="50s"
     )
+
+    while response.status and response.status.state in (StatementState.PENDING, StatementState.RUNNING):
+        time.sleep(1)
+        response = w.statement_execution.get_statement(response.statement_id)
+
+    if response.status and response.status.state == StatementState.FAILED:
+        error_msg = response.status.error.message if response.status.error else "Error desconocido"
+        raise Exception(f"SQL Error: {error_msg}")
+
+    if fetch and response.result and response.result.data_array:
+        return response.result.data_array
+
+    return []
+
 
 def obtener_usuario_actual():
     """Recupera el current_user() desde el entorno de Databricks."""
     try:
         from streamlit import context
         headers = context.headers
-        if "X-Forwarded-Email" in headers: return headers["X-Forwarded-Email"]
-        if "DATABRICKS_CURRENT_USER" in os.environ: return os.environ["DATABRICKS_CURRENT_USER"]
+        if "X-Forwarded-Email" in headers:
+            return headers["X-Forwarded-Email"]
+        if "DATABRICKS_CURRENT_USER" in os.environ:
+            return os.environ["DATABRICKS_CURRENT_USER"]
         raise Exception("No headers")
     except Exception:
         return "admin@bci.cl"
+
 
 def es_administrador():
     """Valida si el usuario actual está en la lista de administradores."""
@@ -169,27 +203,25 @@ def es_administrador():
         admin_list = []
     return usuario_actual in admin_list
 
+
 def generar_sidebar():
     """Genera el menú lateral personalizado."""
     inyectar_css_corporativo()
     usuario = obtener_usuario_actual()
     perfil = "Administrador" if es_administrador() else "Lectura"
-    
-    st.sidebar.markdown(f"👤 **Usuario:**\n`{usuario}`\n\n🛡️ **Perfil:** `{perfil}`")
+
+    st.sidebar.markdown(f"\U0001f464 **Usuario:**\n`{usuario}`\n\n\U0001f6e1\ufe0f **Perfil:** `{perfil}`")
     st.sidebar.divider()
     st.sidebar.markdown("**Navegación**")
-    st.sidebar.page_link("app.py", label="📂 Dashboard Inventario")
-    st.sidebar.page_link("pages/1_Crear_Documento.py", label="➕ Nuevo Documento")
+    st.sidebar.page_link("app.py", label="\U0001f4c2 Dashboard Inventario")
+    st.sidebar.page_link("pages/1_Crear_Documento.py", label="\u2795 Nuevo Documento")
+
 
 def cargar_configuracion_maestra():
     if es_entorno_databricks():
         try:
-            conn = obtener_conexion_databricks()
-            cursor = conn.cursor()
-            # Aseguramos existencia de la tabla antes de consultar
-            cursor.execute("CREATE SCHEMA IF NOT EXISTS bci_kqi_apolo")
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS bci_kqi_apolo.kqi_configuracion (
+            ejecutar_sql("""
+                CREATE TABLE IF NOT EXISTS kqi_configuracion (
                     id_config STRING NOT NULL,
                     nombre_tipo_documento STRING NOT NULL,
                     tipo_procesamiento STRING NOT NULL,
@@ -198,25 +230,25 @@ def cargar_configuracion_maestra():
                     fecha_modificacion TIMESTAMP
                 ) USING DELTA
             """)
-            
-            cursor.execute("SELECT nombre_tipo_documento, tipo_procesamiento, parametros_json, fecha_modificacion FROM bci_kqi_apolo.kqi_configuracion")
-            rows = cursor.fetchall()
+
+            rows = ejecutar_sql(
+                "SELECT nombre_tipo_documento, tipo_procesamiento, parametros_json, fecha_modificacion FROM kqi_configuracion",
+                fetch=True
+            )
             maestra = {}
             for row in rows:
                 nombre = row[0]
                 tipo_proc = row[1]
-                params = json.loads(row[2]) if row[2] else {}
+                params = _parsear_parametros_json(row[2]) if row[2] else {}
                 fecha = str(row[3]) if row[3] else ""
                 maestra[nombre] = {
                     "tipo_procesamiento": tipo_proc,
                     "parametros": params,
                     "timestamp": fecha
                 }
-            cursor.close()
-            conn.close()
             return maestra
         except Exception as e:
-            st.sidebar.warning(f"⚠️ Databricks SQL error (usando fallback mock local): {e}")
+            st.sidebar.warning(f"\u26a0\ufe0f Databricks SQL error (usando fallback mock local): {e}")
 
     try:
         with open("mock_config.json", "r", encoding="utf-8") as f:
@@ -227,18 +259,16 @@ def cargar_configuracion_maestra():
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
+
 def guardar_configuracion_maestra(maestra):
     if es_entorno_databricks():
         try:
-            conn = obtener_conexion_databricks()
-            cursor = conn.cursor()
             usuario = obtener_usuario_actual()
             import datetime
             import uuid
-            
-            cursor.execute("CREATE SCHEMA IF NOT EXISTS bci_kqi_apolo")
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS bci_kqi_apolo.kqi_configuracion (
+
+            ejecutar_sql("""
+                CREATE TABLE IF NOT EXISTS kqi_configuracion (
                     id_config STRING NOT NULL,
                     nombre_tipo_documento STRING NOT NULL,
                     tipo_procesamiento STRING NOT NULL,
@@ -247,45 +277,50 @@ def guardar_configuracion_maestra(maestra):
                     fecha_modificacion TIMESTAMP
                 ) USING DELTA
             """)
-            
+
             for nombre, datos in maestra.items():
                 tipo_proc = datos.get("tipo_procesamiento", "No Estructurado")
                 params = json.dumps(datos.get("parametros", {}), ensure_ascii=False)
                 timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 id_config = str(uuid.uuid4())
-                
-                # MERGE compatible con Databricks
-                cursor.execute(f"""
-                    MERGE INTO bci_kqi_apolo.kqi_configuracion AS target
+
+                nombre_sql = _escape_sql_literal(nombre)
+                tipo_proc_sql = _escape_sql_literal(tipo_proc)
+                params_sql = _escape_sql_literal(params)
+                usuario_sql = _escape_sql_literal(usuario)
+                id_config_sql = _escape_sql_literal(id_config)
+                timestamp_sql = _escape_sql_literal(timestamp_str)
+
+                ejecutar_sql(f"""
+                    MERGE INTO kqi_configuracion AS target
                     USING (
-                        SELECT 
-                            '{nombre}' AS nombre_tipo_documento,
-                            '{tipo_proc}' AS tipo_procesamiento,
-                            '{params.replace("'", "''")}' AS parametros_json,
-                            '{usuario}' AS usuario_modificacion,
-                            CAST('{timestamp_str}' AS TIMESTAMP) AS fecha_modificacion
+                        SELECT
+                            '{nombre_sql}' AS nombre_tipo_documento,
+                            '{tipo_proc_sql}' AS tipo_procesamiento,
+                            '{params_sql}' AS parametros_json,
+                            '{usuario_sql}' AS usuario_modificacion,
+                            CAST('{timestamp_sql}' AS TIMESTAMP) AS fecha_modificacion
                     ) AS source
                     ON target.nombre_tipo_documento = source.nombre_tipo_documento
                     WHEN MATCHED THEN
-                        UPDATE SET 
+                        UPDATE SET
                             tipo_procesamiento = source.tipo_procesamiento,
                             parametros_json = source.parametros_json,
                             usuario_modificacion = source.usuario_modificacion,
                             fecha_modificacion = source.fecha_modificacion
                     WHEN NOT MATCHED THEN
                         INSERT (id_config, nombre_tipo_documento, tipo_procesamiento, parametros_json, usuario_modificacion, fecha_modificacion)
-                        VALUES ('{id_config}', source.nombre_tipo_documento, source.tipo_procesamiento, source.parametros_json, source.usuario_modificacion, source.fecha_modificacion)
+                        VALUES ('{id_config_sql}', source.nombre_tipo_documento, source.tipo_procesamiento, source.parametros_json, source.usuario_modificacion, source.fecha_modificacion)
                 """)
-            conn.commit()
-            cursor.close()
-            conn.close()
-            st.success("✅ Configuración guardada en Unity Catalog (bci_kqi_apolo.kqi_configuracion)")
+
+            st.success("\u2705 Configuración guardada en Unity Catalog (bci_kqi_apolo.kqi_configuracion)")
             return
         except Exception as e:
-            st.error(f"❌ Error en Databricks: {e}. Guardando copia en local...")
-            
+            st.error(f"\u274c Error en Databricks: {e}. Guardando copia en local...")
+
     with open("mock_config.json", "w", encoding="utf-8") as f:
         json.dump(maestra, f, indent=4, ensure_ascii=False)
+
 
 def ejecutar_auditoria_kqi(documento_nombre):
     """Gatilla el motor para el documento seleccionado."""
@@ -293,7 +328,7 @@ def ejecutar_auditoria_kqi(documento_nombre):
         try:
             from databricks.sdk import WorkspaceClient
             w = WorkspaceClient()
-            
+
             job_id = None
             try:
                 with open("databricks_config.yaml", "r", encoding="utf-8") as f:
@@ -301,24 +336,23 @@ def ejecutar_auditoria_kqi(documento_nombre):
                     job_id = db_config.get("databricks_job_id")
             except Exception:
                 pass
-            
+
             job_id = job_id or os.environ.get("DATABRICKS_JOB_ID")
             if not job_id:
                 raise Exception("DATABRICKS_JOB_ID no configurada en variables de entorno o databricks_config.yaml")
-                
+
             run = w.jobs.run_now(
                 job_id=int(job_id),
                 job_parameters={"nombre_documento": documento_nombre}
             )
-            st.sidebar.success(f"🚀 Job gatillado en Databricks: Run ID {run.bind().run_id}")
+            st.sidebar.success(f"\U0001f680 Job gatillado en Databricks: Run ID {run.bind().run_id}")
             return
         except Exception as e:
-            st.sidebar.error(f"❌ Error al gatillar Job en Databricks: {e}")
+            st.sidebar.error(f"\u274c Error al gatillar Job en Databricks: {e}")
             return
 
     try:
         raise Exception("Entorno local detectado. Ejecución del SDK omitida.")
     except Exception as e:
-        st.sidebar.warning(f"⚠️ {e}")
-        st.sidebar.success(f"✅ [MOCK] Ejecución enviada para '{documento_nombre}'.")
-
+        st.sidebar.warning(f"\u26a0\ufe0f {e}")
+        st.sidebar.success(f"\u2705 [MOCK] Ejecución enviada para '{documento_nombre}'.")
