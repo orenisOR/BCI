@@ -3,6 +3,10 @@ command:
   - run
   - app.py
 
+env:
+  - name: DATABRICKS_JOB_ID
+    value: "600311442506437"
+
 resources:
   - name: sql-warehouse
     sql_warehouse:

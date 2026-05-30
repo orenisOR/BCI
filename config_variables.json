@@ -1,15 +1,28 @@
 {
     "kqi_no_estructurados": [
-        {"id": "coherencia", "nombre": "Coherencia"},
-        {"id": "ambiguedad", "nombre": "Ambigüedad"},
-        {"id": "entropia", "nombre": "Entropía"},
-        {"id": "palabras_ilegibles", "nombre": "Cantidad de palabras ilegibles"},
-        {"id": "ratio_imagenes", "nombre": "Cantidad de imágenes sobre cantidad de texto"}
+        {"id": "Coherencia", "nombre": "Coherencia", "descripcion": "Consistencia lógica interna del documento", "fuente_default": "llm"},
+        {"id": "Entropia", "nombre": "Entropía", "descripcion": "Contenido informativo relevante vs redundante", "fuente_default": "llm"},
+        {"id": "Ambiguedad", "nombre": "Ambigüedad", "descripcion": "Categoría compuesta de calidad textual", "fuente_default": "compuesta"}
     ],
+    "subelementos_disponibles": [
+        {"id": "palabras_ilegibles", "nombre": "Palabras Ilegibles", "descripcion": "Caracteres no reconocibles en el OCR", "fuente_default": "determinista", "metodo_default": "regex_ratio"},
+        {"id": "ratio_imagenes", "nombre": "Ratio Imágenes/Texto", "descripcion": "Proporción de figuras vs contenido textual", "fuente_default": "determinista", "metodo_default": "element_count_ratio"},
+        {"id": "largo_texto", "nombre": "Largo de Texto", "descripcion": "Cumplimiento de largo mínimo esperado", "fuente_default": "determinista", "metodo_default": "largo_texto"},
+        {"id": "redundancia", "nombre": "Redundancia", "descripcion": "Nivel de repetición del contenido", "fuente_default": "determinista", "metodo_default": "compression_ratio"}
+    ],
+    "evaluadores_deterministas": [
+        {"id": "regex_ratio", "nombre": "Regex Ratio", "descripcion": "Mide proporción de caracteres que matchean un patrón", "params": ["patron", "polaridad"]},
+        {"id": "element_count_ratio", "nombre": "Element Count Ratio", "descripcion": "Ratio de elementos de un tipo vs total (usa ai_parse_document)", "params": ["tipo_elemento", "polaridad"]},
+        {"id": "shannon_entropy", "nombre": "Shannon Entropy", "descripcion": "Entropía de distribución de caracteres", "params": ["umbral_max", "polaridad"]},
+        {"id": "compression_ratio", "nombre": "Compression Ratio", "descripcion": "Ratio de compresión zlib (redundancia)", "params": ["umbral_min", "umbral_max", "polaridad"]},
+        {"id": "largo_texto", "nombre": "Largo Texto", "descripcion": "Valida largo mínimo de caracteres", "params": ["min_chars", "polaridad"]}
+    ],
+    "fuentes_disponibles": ["llm", "determinista", "compuesta"],
+    "polaridades": ["positiva", "negativa"],
     "modelos_llm": [
+        "gemini-2.5-flash",
         "gemini-1.5-pro",
-        "gemini-1.5-flash",
-        "gemini-1.0-pro"
+        "gemini-1.5-flash"
     ],
     "administradores": [
         "admin@bci.cl",

@@ -322,8 +322,11 @@ def guardar_configuracion_maestra(maestra):
         json.dump(maestra, f, indent=4, ensure_ascii=False)
 
 
-def ejecutar_auditoria_kqi(documento_nombre):
-    """Gatilla el motor para el documento seleccionado."""
+def ejecutar_auditoria_kqi(documento_nombre, id_documento_target=None):
+    """Gatilla el motor para el documento seleccionado.
+    Usa st.toast() para feedback y guarda estado en session_state
+    para evitar errores DOM removeChild al escribir al sidebar durante renders.
+    """
     if es_entorno_databricks():
         try:
             from databricks.sdk import WorkspaceClient
@@ -343,16 +346,20 @@ def ejecutar_auditoria_kqi(documento_nombre):
 
             run = w.jobs.run_now(
                 job_id=int(job_id),
-                job_parameters={"nombre_documento": documento_nombre}
+                job_parameters={"nombre_documento": documento_nombre, "id_documento_target": id_documento_target or ""}
             )
-            st.sidebar.success(f"\U0001f680 Job gatillado en Databricks: Run ID {run.bind().run_id}")
+            # Compatible con distintas versiones del SDK (objeto o dict)
+            bound = run.bind()
+            run_id = bound["run_id"] if isinstance(bound, dict) else bound.run_id
+            st.session_state["ultimo_run_id"] = run_id
+            st.session_state["ultimo_run_status"] = "success"
+            st.toast(f"Job gatillado exitosamente. Run ID: {run_id}", icon="\U0001f680")
             return
         except Exception as e:
-            st.sidebar.error(f"\u274c Error al gatillar Job en Databricks: {e}")
+            st.session_state["ultimo_run_status"] = "error"
+            st.session_state["ultimo_run_error"] = str(e)
+            st.toast(f"Error al gatillar Job: {e}", icon="\u274c")
             return
 
-    try:
-        raise Exception("Entorno local detectado. Ejecución del SDK omitida.")
-    except Exception as e:
-        st.sidebar.warning(f"\u26a0\ufe0f {e}")
-        st.sidebar.success(f"\u2705 [MOCK] Ejecución enviada para '{documento_nombre}'.")
+    st.session_state["ultimo_run_status"] = "mock"
+    st.toast(f"[MOCK] Ejecución enviada para '{documento_nombre}'.", icon="\u2705")

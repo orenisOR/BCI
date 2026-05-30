@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 import datetime
-from utils import generar_sidebar, cargar_configuracion_maestra, guardar_configuracion_maestra, es_administrador, es_entorno_databricks, ejecutar_auditoria_kqi
+from utils import generar_sidebar, cargar_configuracion_maestra, guardar_configuracion_maestra, es_administrador, es_entorno_databricks, ejecutar_auditoria_kqi, ejecutar_sql, ejecutar_sql
 
 st.set_page_config(page_title="Configuración de Documento - KQI Bci", layout="wide", page_icon="⚙️")
 generar_sidebar()
@@ -36,100 +36,306 @@ except FileNotFoundError:
 
 # ==========================================
 # PROGRESSIVE DISCLOSURE Y PARAMETRIZACIÓN
+# Arquitectura Plug-and-Play: pesos_kqi jerárquico
 # ==========================================
 if "No Estructurado" in tipo_dato:
-    st.subheader("Parametrización Semántica (FAISS + LLM)")
-    with st.container():
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("**Pesos KQI (0.0 a 1.0)**")
-            pesos_kqi = {}
-            config_previa = config_maestra.get(doc_name, {}).get("parametros", {}).get("pesos_kqi", {})
-            for var in variables_no_estructurados:
-                val_previo = config_previa.get(var["id"], 0.5)
-                pesos_kqi[var["id"]] = st.slider(var["nombre"], 0.0, 1.0, float(val_previo), 0.1)
-                st.caption(f"Ajusta la sensibilidad del motor para medir {var['nombre'].lower()}.")
-        
-        with col2:
-            st.markdown("**Configuración LLM (Gemini)**")
-            mod_previo = config_maestra.get(doc_name, {}).get("parametros", {}).get("modelo_llm", modelos_disponibles[0])
-            idx_modelo = modelos_disponibles.index(mod_previo) if mod_previo in modelos_disponibles else 0
-            
-            modelo_llm = st.selectbox("Selecciona el modelo a usar:", modelos_disponibles, index=idx_modelo)
-            st.caption("Determina la versión del modelo fundacional para extraer el juicio de evaluación.")
-            st.info("💡 En producción, el API Key será inyectada mediante `dbutils.secrets.get()`.")
+    st.subheader("🔌 Configuración de Variables KQI (Plugin Architecture)")
+    st.caption("Cada variable puede evaluarse por LLM, por un evaluador determinístico registrado, o ser una categoría compuesta de sub-elementos.")
 
-    with st.container():
-        st.markdown("---")
-        st.markdown("### Configuración Avanzada")
-        
-        c3, c4 = st.columns(2)
-        with c3:
-            st.markdown("**Umbrales de Calidad (0.0 a 1.0)**")
-            umbrales_previos = config_maestra.get(doc_name, {}).get("parametros", {}).get("umbrales", {
-                "aprobacion_gold": 0.80, "revision_hitl": 0.70, "alerta_lote_critico": 0.85,
-                "semaforo_verde": 0.80, "semaforo_amarillo": 0.50
-            })
-            
-            aprobacion_gold = st.number_input("Umbral Capa Gold (Aprobación Automática)", 0.0, 1.0, float(umbrales_previos.get("aprobacion_gold", 0.80)), 0.05)
-            revision_hitl = st.number_input("Umbral Revisión Humana (HITL)", 0.0, 1.0, float(umbrales_previos.get("revision_hitl", 0.70)), 0.05)
-            alerta_lote = st.number_input("Alerta de Lote Crítico", 0.0, 1.0, float(umbrales_previos.get("alerta_lote_critico", 0.85)), 0.05)
-            semaforo_v = st.number_input("Semáforo Verde PowerBI", 0.0, 1.0, float(umbrales_previos.get("semaforo_verde", 0.80)), 0.05)
-            semaforo_a = st.number_input("Semáforo Amarillo PowerBI", 0.0, 1.0, float(umbrales_previos.get("semaforo_amarillo", 0.50)), 0.05)
-            
-            umbrales = {
-                "aprobacion_gold": aprobacion_gold,
-                "revision_hitl": revision_hitl,
-                "alerta_lote_critico": alerta_lote,
-                "semaforo_verde": semaforo_v,
-                "semaforo_amarillo": semaforo_a
-            }
-            
-        with c4:
-            st.markdown("**Detección de Datos Personales (PII)**")
-            st.caption("Configura reglas dinámicas de expresiones regulares (Regex) para identificar y auditar datos sensibles (PII).")
-            
-            pii_state_key = f"pii_{doc_name}"
-            if pii_state_key not in st.session_state:
-                # Cargar existentes de mock_config o establecer los por defecto
-                st.session_state[pii_state_key] = config_maestra.get(doc_name, {}).get("parametros", {}).get("regex_pii", {
-                    "rut_chileno": "\\b\\d{7,8}-[Kk0-9]\\b",
-                    "correo": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
-                    "telefono": "\\+?569\\d{8}"
-                })
-            
-            # Formulario para añadir nueva regla PII
-            with st.expander("➕ Añadir Nueva Regla PII"):
-                pii_nombre = st.text_input("Nombre del PII", placeholder="Ej. tarjeta_credito, direccion")
-                pii_regex = st.text_input("Expresión Regular (Regex)", placeholder="Ej. \\b(?:\\d[ -]*?){13,16}\\b")
-                if st.button("Añadir PII"):
-                    if pii_nombre and pii_regex:
-                        st.session_state[pii_state_key][pii_nombre] = pii_regex
-                        st.success(f"PII '{pii_nombre}' añadido exitosamente.")
-                        st.rerun()
+    # Cargar opciones del config
+    evaluadores_det = variables_config.get("evaluadores_deterministas", [])
+    subelementos_catalogo = variables_config.get("subelementos_disponibles", [])
+    fuentes_disponibles = variables_config.get("fuentes_disponibles", ["llm", "determinista", "compuesta"])
+    polaridades = variables_config.get("polaridades", ["positiva", "negativa"])
+    metodos_ids = [e["id"] for e in evaluadores_det]
+
+    # Cargar config previa (soporta formato jerárquico y legacy)
+    config_previa = config_maestra.get(doc_name, {}).get("parametros", {}).get("pesos_kqi", {})
+
+    # State key para variables dinámicas
+    vars_state_key = f"vars_kqi_{doc_name}"
+    if vars_state_key not in st.session_state:
+        # Inicializar desde config previa
+        st.session_state[vars_state_key] = config_previa if config_previa else {}
+
+    pesos_kqi = {}
+
+    # --- Sección: Variables KQI principales ---
+    st.markdown("### Variables de Evaluación")
+
+    # Selector de variables activas para este documento
+    # Variables compuestas siempre se incluyen; las semánticas/deterministas son seleccionables
+    vars_compuestas = [v for v in variables_no_estructurados if v.get("fuente_default") == "compuesta"]
+    vars_seleccionables = [v for v in variables_no_estructurados if v.get("fuente_default") != "compuesta"]
+
+    # Determinar cuáles estaban activas previamente
+    ids_previos_activos = list(config_previa.keys()) if config_previa else [v["id"] for v in vars_seleccionables]
+    ids_seleccionables = [v["id"] for v in vars_seleccionables]
+    default_seleccion = [vid for vid in ids_previos_activos if vid in ids_seleccionables]
+
+    vars_activas_ids = st.multiselect(
+        "Variables semánticas activas para este documento:",
+        options=ids_seleccionables,
+        default=default_seleccion,
+        format_func=lambda vid: next((v["nombre"] for v in vars_seleccionables if v["id"] == vid), vid),
+        key=f"multiselect_vars_{doc_name}",
+        help="Selecciona qué variables de calidad aplican a este tipo de documento. Las compuestas siempre se incluyen."
+    )
+
+    # Combinar: compuestas (siempre) + seleccionadas
+    variables_activas = vars_compuestas + [v for v in vars_seleccionables if v["id"] in vars_activas_ids]
+
+    for var in variables_activas:
+        var_id = var["id"]
+        var_nombre = var["nombre"]
+        var_desc = var.get("descripcion", "")
+        fuente_default = var.get("fuente_default", "llm")
+
+        # Leer config previa para esta variable
+        prev = config_previa.get(var_id, {})
+        if isinstance(prev, (int, float)):
+            # Legacy format: convertir
+            prev = {"peso": float(prev), "fuente": "llm"}
+
+        with st.expander(f"📊 **{var_nombre}** — {var_desc}", expanded=True):
+            col_peso, col_fuente = st.columns([1, 2])
+
+            with col_peso:
+                peso_val = st.slider(
+                    f"Peso ({var_id})", 0.0, 1.0,
+                    float(prev.get("peso", 0.3)), 0.05,
+                    key=f"peso_{var_id}"
+                )
+
+            with col_fuente:
+                # Variables compuestas no muestran selector — siempre son "compuesta"
+                if fuente_default == "compuesta":
+                    fuente_val = "compuesta"
+                    st.markdown(f"**Fuente:** `compuesta` *(derivada de subelementos)*")
+                else:
+                    fuente_prev = prev.get("fuente", fuente_default)
+                    idx_fuente = fuentes_disponibles.index(fuente_prev) if fuente_prev in fuentes_disponibles else 0
+                    fuente_val = st.selectbox(
+                        f"Fuente de evaluación ({var_id})",
+                        fuentes_disponibles,
+                        index=idx_fuente,
+                        key=f"fuente_{var_id}"
+                    )
+
+            # --- Fuente: LLM ---
+            if fuente_val == "llm":
+                pesos_kqi[var_id] = {"peso": peso_val, "fuente": "llm"}
+
+            # --- Fuente: Determinista ---
+            elif fuente_val == "determinista":
+                col_met, col_pol = st.columns(2)
+                with col_met:
+                    metodo_prev = prev.get("metodo", metodos_ids[0] if metodos_ids else "regex_ratio")
+                    idx_met = metodos_ids.index(metodo_prev) if metodo_prev in metodos_ids else 0
+                    metodo_val = st.selectbox(
+                        f"Método evaluador ({var_id})", metodos_ids, index=idx_met,
+                        key=f"metodo_{var_id}"
+                    )
+                    # Mostrar descripción del evaluador
+                    eval_info = next((e for e in evaluadores_det if e["id"] == metodo_val), None)
+                    if eval_info:
+                        st.caption(eval_info.get("descripcion", ""))
+
+                with col_pol:
+                    pol_prev = prev.get("polaridad", prev.get("params", {}).get("polaridad", "negativa"))
+                    idx_pol = polaridades.index(pol_prev) if pol_prev in polaridades else 1
+                    polaridad_val = st.selectbox(
+                        f"Polaridad ({var_id})", polaridades, index=idx_pol,
+                        key=f"pol_{var_id}"
+                    )
+
+                # Parámetros específicos del evaluador
+                params_kqi = {"polaridad": polaridad_val}
+                if eval_info:
+                    param_keys = [p for p in eval_info.get("params", []) if p != "polaridad"]
+                    if param_keys:
+                        st.markdown("**Parámetros de calibración:**")
+                        prev_params = prev.get("params", {})
+                        cols_params = st.columns(len(param_keys))
+                        for i, pk in enumerate(param_keys):
+                            with cols_params[i]:
+                                params_kqi[pk] = st.text_input(
+                                    pk, value=str(prev_params.get(pk, "")),
+                                    key=f"param_{var_id}_{pk}"
+                                )
+
+                pesos_kqi[var_id] = {
+                    "peso": peso_val, "fuente": "determinista",
+                    "metodo": metodo_val, "polaridad": polaridad_val,
+                    "params": params_kqi
+                }
+
+            # --- Fuente: Compuesta ---
+            elif fuente_val == "compuesta":
+                st.markdown("**Sub-elementos:**")
+                subelementos = {}
+                prev_subs = prev.get("subelementos", {})
+
+                # Permitir agregar sub-elementos del catálogo
+                sub_state_key = f"subs_{doc_name}_{var_id}"
+                if sub_state_key not in st.session_state:
+                    if prev_subs:
+                        st.session_state[sub_state_key] = list(prev_subs.keys())
                     else:
-                        st.error("Por favor completa ambos campos.")
-            
-            # Mostrar PIIs actuales
-            st.write("**PIIs Configurados:**")
-            pii_dict_copy = dict(st.session_state[pii_state_key])
-            if not pii_dict_copy:
-                st.info("No hay PIIs configurados para este documento.")
+                        st.session_state[sub_state_key] = [s["id"] for s in subelementos_catalogo[:2]]
+
+                # Selector de sub-elementos activos
+                sub_opciones = [s["id"] for s in subelementos_catalogo]
+                subs_activos = st.multiselect(
+                    f"Sub-elementos activos para {var_nombre}",
+                    sub_opciones,
+                    default=st.session_state[sub_state_key],
+                    key=f"multi_sub_{var_id}"
+                )
+                st.session_state[sub_state_key] = subs_activos
+
+                for sub_id in subs_activos:
+                    sub_cat = next((s for s in subelementos_catalogo if s["id"] == sub_id), None)
+                    if not sub_cat:
+                        continue
+                    sub_prev = prev_subs.get(sub_id, {})
+
+                    with st.container():
+                        st.markdown(f"---")
+                        st.markdown(f"**└ {sub_cat['nombre']}** — _{sub_cat.get('descripcion', '')}_")
+                        cs1, cs2, cs3 = st.columns(3)
+
+                        with cs1:
+                            sub_peso = st.slider(
+                                f"Peso relativo ({sub_id})", 0.0, 1.0,
+                                float(sub_prev.get("peso", 0.5)), 0.1,
+                                key=f"subpeso_{var_id}_{sub_id}"
+                            )
+                        with cs2:
+                            sub_metodo_def = sub_cat.get("metodo_default", "regex_ratio")
+                            sub_met_prev = sub_prev.get("metodo", sub_metodo_def)
+                            idx_sm = metodos_ids.index(sub_met_prev) if sub_met_prev in metodos_ids else 0
+                            sub_metodo = st.selectbox(
+                                f"Método ({sub_id})", metodos_ids, index=idx_sm,
+                                key=f"submet_{var_id}_{sub_id}"
+                            )
+                        with cs3:
+                            sub_pol_prev = sub_prev.get("polaridad", "negativa")
+                            idx_sp = polaridades.index(sub_pol_prev) if sub_pol_prev in polaridades else 1
+                            sub_pol = st.selectbox(
+                                f"Polaridad ({sub_id})", polaridades, index=idx_sp,
+                                key=f"subpol_{var_id}_{sub_id}"
+                            )
+
+                        # Parámetros del sub-elemento
+                        sub_eval_info = next((e for e in evaluadores_det if e["id"] == sub_metodo), None)
+                        sub_params = {"polaridad": sub_pol}
+                        if sub_eval_info:
+                            sub_param_keys = [p for p in sub_eval_info.get("params", []) if p != "polaridad"]
+                            if sub_param_keys:
+                                prev_sub_params = sub_prev.get("params", {})
+                                cols_sp = st.columns(len(sub_param_keys))
+                                for i, spk in enumerate(sub_param_keys):
+                                    with cols_sp[i]:
+                                        sub_params[spk] = st.text_input(
+                                            f"{spk} ({sub_id})",
+                                            value=str(prev_sub_params.get(spk, "")),
+                                            key=f"subparam_{var_id}_{sub_id}_{spk}"
+                                        )
+
+                        subelementos[sub_id] = {
+                            "peso": sub_peso,
+                            "fuente": "determinista",
+                            "metodo": sub_metodo,
+                            "polaridad": sub_pol,
+                            "params": sub_params
+                        }
+
+                pesos_kqi[var_id] = {
+                    "peso": peso_val, "fuente": "compuesta",
+                    "subelementos": subelementos
+                }
+
+    # --- Sección: Modelo LLM ---
+    st.markdown("---")
+    st.markdown("### Configuración LLM")
+    col_llm1, col_llm2 = st.columns(2)
+    with col_llm1:
+        mod_previo = config_maestra.get(doc_name, {}).get("parametros", {}).get("modelo_llm", modelos_disponibles[0])
+        idx_modelo = modelos_disponibles.index(mod_previo) if mod_previo in modelos_disponibles else 0
+        modelo_llm = st.selectbox("Modelo LLM para evaluación semántica:", modelos_disponibles, index=idx_modelo)
+    with col_llm2:
+        st.info("💡 El motor usa el plugin `llm_gemini` registrado en la Factory. API Key inyectada vía `dbutils.secrets`.")
+
+    # --- Sección: Umbrales ---
+    st.markdown("---")
+    st.markdown("### Umbrales de Calidad")
+    c3, c4 = st.columns(2)
+    with c3:
+        umbrales_previos = config_maestra.get(doc_name, {}).get("parametros", {}).get("umbrales", {
+            "aprobacion_gold": 0.80, "revision_hitl": 0.70, "alerta_lote_critico": 0.85,
+            "semaforo_verde": 0.80, "semaforo_amarillo": 0.50
+        })
+        aprobacion_gold = st.number_input("Umbral Capa Gold (Aprobación Automática)", 0.0, 1.0, float(umbrales_previos.get("aprobacion_gold", 0.80)), 0.05)
+        revision_hitl = st.number_input("Umbral Revisión Humana (HITL)", 0.0, 1.0, float(umbrales_previos.get("revision_hitl", 0.70)), 0.05)
+        alerta_lote = st.number_input("Alerta de Lote Crítico", 0.0, 1.0, float(umbrales_previos.get("alerta_lote_critico", 0.85)), 0.05)
+
+    with c4:
+        semaforo_v = st.number_input("Semáforo Verde PowerBI", 0.0, 1.0, float(umbrales_previos.get("semaforo_verde", 0.80)), 0.05)
+        semaforo_a = st.number_input("Semáforo Amarillo PowerBI", 0.0, 1.0, float(umbrales_previos.get("semaforo_amarillo", 0.50)), 0.05)
+
+    umbrales = {
+        "aprobacion_gold": aprobacion_gold,
+        "revision_hitl": revision_hitl,
+        "alerta_lote_critico": alerta_lote,
+        "semaforo_verde": semaforo_v,
+        "semaforo_amarillo": semaforo_a
+    }
+
+    # --- Sección: PII ---
+    st.markdown("---")
+    st.markdown("### Detección de Datos Personales (PII)")
+    st.caption("Reglas dinámicas de Regex para identificar datos sensibles.")
+
+    pii_state_key = f"pii_{doc_name}"
+    if pii_state_key not in st.session_state:
+        st.session_state[pii_state_key] = config_maestra.get(doc_name, {}).get("parametros", {}).get("regex_pii", {
+            "rut_chileno": "\\b\\d{7,8}-[Kk0-9]\\b",
+            "correo": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+            "telefono": "\\+?569\\d{8}"
+        })
+
+    with st.expander("➕ Añadir Nueva Regla PII"):
+        pii_nombre = st.text_input("Nombre del PII", placeholder="Ej. tarjeta_credito")
+        pii_regex = st.text_input("Expresión Regular", placeholder="Ej. \\b(?:\\d[ -]*?){13,16}\\b")
+        if st.button("Añadir PII"):
+            if pii_nombre and pii_regex:
+                st.session_state[pii_state_key][pii_nombre] = pii_regex
+                st.success(f"PII '{pii_nombre}' añadido.")
+                st.rerun()
             else:
-                for pii_k, pii_val in pii_dict_copy.items():
-                    col_p1, col_p2 = st.columns([5, 1])
-                    col_p1.write(f"🔍 **{pii_k}**: `{pii_val}`")
-                    if col_p2.button("🗑️", key=f"del_pii_{doc_name}_{pii_k}"):
-                        del st.session_state[pii_state_key][pii_k]
-                        st.success(f"PII '{pii_k}' eliminado.")
-                        st.rerun()
-            
-            regex_pii = st.session_state[pii_state_key]
+                st.error("Completa ambos campos.")
+
+    pii_dict_copy = dict(st.session_state[pii_state_key])
+    if pii_dict_copy:
+        for pii_k, pii_val in pii_dict_copy.items():
+            col_p1, col_p2 = st.columns([5, 1])
+            col_p1.write(f"🔍 **{pii_k}**: `{pii_val}`")
+            if col_p2.button("🗑️", key=f"del_pii_{doc_name}_{pii_k}"):
+                del st.session_state[pii_state_key][pii_k]
+                st.rerun()
+
+    regex_pii = st.session_state[pii_state_key]
+
+    # --- Preview JSON generado ---
+    st.markdown("---")
+    with st.expander("🔍 Preview: JSON de configuración que se guardará"):
+        st.json(pesos_kqi)
 
     config_generada = {
         "tipo_procesamiento": "No Estructurado",
         "parametros": {
-            "pesos_kqi": pesos_kqi, 
+            "pesos_kqi": pesos_kqi,
             "modelo_llm": modelo_llm,
             "umbrales": umbrales,
             "regex_pii": regex_pii
@@ -210,23 +416,38 @@ if st.button("Guardar Configuración de Documento", type="primary", disabled=not
 
 st.write("")
 st.markdown("### Ejecución del Orquestador")
-st.caption("Gatilla el procesamiento completo del pipeline desde aquí.")
+st.caption("Gatilla la auditoría On-Demand para el documento seleccionado.")
 
-if st.button("▶️ Ejecutar Motor KQI", type="secondary"):
-    if es_entorno_databricks():
-        with st.spinner("Gatillando Job en Databricks..."):
-            ejecutar_auditoria_kqi(doc_name)
-    else:
-        with st.spinner("Ejecutando motor PySpark y generación de PowerBI local..."):
-            import subprocess
-            try:
-                res = subprocess.run(["python", "motor_kqi.py", doc_name], capture_output=True, text=True)
-                res2 = subprocess.run(["python", "generador_powerbi.py"], capture_output=True, text=True)
-                if res.returncode == 0 and res2.returncode == 0:
-                    st.success("✅ Motor ejecutado exitosamente. Los datos de PowerBI y la capa Gold/HITL local han sido actualizados.")
-                else:
-                    st.error("❌ Ocurrió un error al ejecutar los procesos locales.")
-                with st.expander("Ver Logs de Ejecución"):
-                    st.code(f"--- MOTOR LOGS ---\n{res.stdout}\n{res.stderr}\n\n--- POWERBI LOGS ---\n{res2.stdout}\n{res2.stderr}")
-            except Exception as e:
-                st.error(f"Error al ejecutar: {e}")
+# Selector de documento específico desde Silver
+documentos_silver = []
+if es_entorno_databricks():
+    try:
+        rows = ejecutar_sql(
+            f"SELECT DISTINCT id_documento FROM silver_transcripciones WHERE (estado_auditoria IS NULL OR estado_auditoria != 'procesado') AND nombre_documento = '{doc_name}' ORDER BY id_documento",
+            fetch=True
+        )
+        documentos_silver = [r[0] for r in rows if r[0]]
+    except Exception:
+        pass
+
+opciones_doc = ["(Todos - lote completo)"] + documentos_silver
+id_doc_seleccionado = st.selectbox(
+    "Documento a auditar (Silver):",
+    opciones_doc,
+    key="select_id_doc_config",
+    help="Selecciona un documento específico o 'Todos' para procesar el lote completo."
+)
+
+# Mostrar estado de última ejecución (estable, sin mutar DOM)
+if st.session_state.get("ultimo_run_status") == "success":
+    st.success(f"🚀 Último Job gatillado. Run ID: {st.session_state.get('ultimo_run_id', 'N/A')}")
+elif st.session_state.get("ultimo_run_status") == "error":
+    st.error(f"❌ {st.session_state.get('ultimo_run_error', 'Error desconocido')}")
+
+btn_motor = st.button("▶️ Ejecutar auditoría", type="secondary", key="btn_motor_config")
+
+# Ejecutar DESPUÉS de todo el layout para evitar removeChild
+if btn_motor:
+    id_target = None if id_doc_seleccionado.startswith("(Todos") else id_doc_seleccionado
+    ejecutar_auditoria_kqi(doc_name, id_documento_target=id_target)
+    st.rerun()
